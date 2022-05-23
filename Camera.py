@@ -34,19 +34,19 @@ class Camera(rs.pipeline, rs.config, rs.rs400_advanced_mode):
         ds5_dev = rs.device()
         devices = ctx.query_devices()
         assert len(list(devices)) == 1, "Either no camera or more than one camera has been connected."
-        self.device = devices[0] # Ttemporal_filter.set_option(rs.option.filter_smooth_delta, 0.25)his gives back the sensor options
+        self.device = devices[0] # Temporal_filter.set_option(rs.option.filter_smooth_delta, 0.25)his gives back the sensor options
         self.depth_sensor = self.device.first_depth_sensor()
         self.color_sensor = self.device.first_color_sensor()
         self.motion_sensor = self.device.first_motion_sensor()
         rs.rs400_advanced_mode.__init__(self, devices[0])
         # Parameter attribute for depth sensor
         self.param_dict = self.get_depth_sensor_params()
-    def start_camera(self, height = 1280, width = 720, framerate = 30, streams = None):
+    def start_camera(self, width = 1280, height = 720, framerate = 30, streams = None):
         '''
         Start camera streams specified by list streams:
         Arguments: 
-        height: int, Default : 1280
-        width: int, Default : 720
+        height: int, Default : 720
+        width: int, Default : 1280
         framerate: int, Default: 30
         streams: List, Default: None
         Optional - Enables motion, color, infrared and depth streams by default for the D435i
@@ -54,9 +54,9 @@ class Camera(rs.pipeline, rs.config, rs.rs400_advanced_mode):
         Returns: None
         '''
         if streams == None:
-            self.enable_stream(rs.stream.depth, height, width, rs.format.z16, framerate)
-            self.enable_stream(rs.stream.color, height, width, rs.format.rgb8, framerate)
-            self.enable_stream(rs.stream.infrared, height, width, framerate = framerate)
+            self.enable_stream(rs.stream.depth, width, height, rs.format.z16, framerate)
+            self.enable_stream(rs.stream.color, width, height, rs.format.rgb8, framerate)
+            self.enable_stream(rs.stream.infrared, width, height, framerate = framerate)
         else:
             print("NotImplemented.")
         self.start(self)
