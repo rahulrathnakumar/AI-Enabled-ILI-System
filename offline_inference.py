@@ -8,17 +8,6 @@ Expected IO:
 Input: Data in the form of images
 Output: Corresponding results, convert to GIF for demo.
 ===============================================
-NOTES:
-How would this possibly work?
-- Camera streaming at 30Hz.
-- Capture images when stepper rotates: You would end up having a whole set of images to do detection on. From the point of view
-of inference, if time is not a concern, we can repeat inference on each new frame, but this is inefficient. MC Dropout is slow. 
-We need to measure the speed of MC Dropout. The uncertainty quantification is the limiting factor. 
-- Once you do inference, how do you mark and count unique instances of defects? Change detection is an idea we can use here. 
-For detecting changes offline, we need to have, along with each frame, the metadata of odometry. This would be an estimate of 
-angular position along with its uncertainty.  
-- 
-
 '''
 # Torch
 import torch
