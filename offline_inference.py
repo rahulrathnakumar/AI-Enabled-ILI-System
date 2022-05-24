@@ -60,11 +60,16 @@ dataset = args.dataset
 data_fmt = args.data_fmt
 model_path = args.model_path
 mc_samples = args.mc_samples
-# Stream depth and odometry data into data_handler for pytorch
 '''
 Data FMT:
 RGB-X-Y-Z-Odom
 This data is stored offline using record.py during inspection run.
+- Data processing w/ numpy to obtain RGB-DNC from RGB-XYZ
+- PyTorch dataloader 
+- Proceed as usual for inference
+- Plug in measurement module (improvements needed!)
+- Risk assessment from measurement module (improvements needed!)
+
 '''
 
 # Dataset params
