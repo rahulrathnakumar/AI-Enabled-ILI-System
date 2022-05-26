@@ -21,18 +21,20 @@ import cv2
 import time
 
 # ROS
-import rospy
 
-import Camera
+
+from Camera import *
 # Need to insert required packages to interface with RTAB-Map
 
 np.seterr(all='raise')
 
 
-def save_data(frame_id, save_path, rgb, x, y, z, odom):
-    camera_data = np.stack(rgb, x, y, z, axis = 0)
-    np.save(file = save_path + 'imgs_' + frame_id + '.npy', arr = camera_data)
-    np.save(file = save_path + 'odom_' + frame_id + '.npy', arr = odom)
+def save_data(frame_id, save_path, rgb, x, y, z, odom = None):
+    print(rgb.shape, x.shape)
+    camera_data = np.dstack((rgb, x, y, z))
+    np.save(file = save_path + 'imgs_' + str(frame_id) + '.npy', arr = camera_data)
+    if odom != None:
+        np.save(file = save_path + 'odom_' + str(frame_id) + '.npy', arr = odom)
 
 def get_frame(camera):
     frames = camera.wait_for_frames()
@@ -83,14 +85,18 @@ def p_un_normalize(p):
     return p_un_norm
 
 
+# save
+save_path = 'data/records/052522/'
+
 # camera data stream
 camera = Camera()
 width = 1280
 height = 720
 camera.start_camera(width = width, height = height, framerate = 30)
+camera.load_preset('HighAccuracyPreset.json')
 
 # ESC params init
-eps = 1e-3
+eps = 1e-2
 p_min, p_max = camera.query_sensor_param_bounds()
 nES = len(p_min)
 p_diff = p_max - p_min
@@ -110,31 +116,54 @@ frame_id = 0
 try:
     while True:
         frame_id = frame_id + 1
+        print(frame_id)
         start_time = time.time()
         color_frame, depth_frame = get_frame(camera)
+        color = np.asarray(color_frame.get_data())
         depth = np.asarray(depth_frame.get_data())
-        cost = compute_fill_factor(depth_frame)
-        prev_cost = cost
-        while cost - prev_cost > eps:
+        depth = np.expand_dims(depth, axis = 0)
+        if frame_id == 1:
+            prev_cost = 1e10
+        cost = compute_fill_factor(depth)
+        j = 0
+        while np.abs(cost - prev_cost) > eps and cost > 1.0:
+            j = j + 1
+            print("ESC Iteration number: ", j)
             print("Hold Camera still ... ESC working.")
             frame_id = frame_id + 1
             pES = camera.get_depth_sensor_params()
             pES_n = p_normalize(pES)
-            pES_n = ES_step(pES_n,cost,amplitude)
+            pES_n = ES_step(pES_n,j,cost,amplitude)
             pES = p_un_normalize(pES_n)
             prev_cost = cost
-            cost = compute_fill_factor(depth_frame)
-            if cost - prev_cost <= eps:
+            camera.set_depth_sensor_params(pES)
+            color_frame, depth_frame = get_frame(camera)
+            depth = np.asarray(depth_frame.get_data())
+            color = np.asarray(color_frame.get_data())
+            depth = np.expand_dims(depth, axis = 0)
+            cost = compute_fill_factor(depth)
+            print("Cost: ", cost)
+            print("Improvement: ", np.abs(cost - prev_cost))
+            if np.abs(cost - prev_cost) < eps and cost < 0.25:
                 print("Camera param calibration complete.")
+                break
         pointsContainer = pc.calculate(depth_frame)
         points = np.asarray(pointsContainer.get_vertices())
         points = points.view(np.float32).reshape(points.shape + (-1,))
         x = points[:,0]
         y = points[:,1]
         z = points[:,2]
-        x = x.reshape((height,width))
-        y = y.reshape((height,width))
-        z = z.reshape((height,width))
+        print(depth.shape)
+        x = x.reshape((height,width, 1))
+        y = y.reshape((height,width, 1))
+        z = z.reshape((height,width, 1))
+        if frame_id % 100 == 0:
+            save_data(frame_id=frame_id, save_path=save_path, rgb = color, x = x, y = y, z = z)
+        # cv2.imshow("Frame",color)   #show captured frame
+        # #press 'q' to break out of the loop
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
+
         # --- Data from RTAB Map --- #
         '''
         Notes:
@@ -144,6 +173,6 @@ try:
         # Call save_data to write data into file (continuous? too much space(!!))
 
 
-        # print("--- %s Hz ---" % (1/(time.time() - start_time)))
+        print("--- %s Hz ---" % (1/(time.time() - start_time)))
 finally:
     camera.stop()
