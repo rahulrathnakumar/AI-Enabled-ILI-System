@@ -20,6 +20,8 @@ import pyrealsense2 as rs
 import cv2
 import time
 
+
+import matplotlib.pyplot as plt
 # ROS
 
 
@@ -31,8 +33,11 @@ np.seterr(all='raise')
 
 def save_data(frame_id, save_path, rgb, x, y, z, odom = None):
     print(rgb.shape, x.shape)
-    camera_data = np.dstack((rgb, x, y, z))
-    np.save(file = save_path + 'imgs_' + str(frame_id) + '.npy', arr = camera_data)
+    camera_data = np.dstack((rgb, z))
+    # subplots - temp!
+    cv2.imwrite(save_path + 'rgb_' + str(frame_id) + '.png', rgb)
+    cv2.imwrite(save_path + 'depth_' + str(frame_id) + '.png', z)
+    # np.save(file = save_path + 'imgs_' + str(frame_id) + '.npy', arr = camera_data)
     if odom != None:
         np.save(file = save_path + 'odom_' + str(frame_id) + '.npy', arr = odom)
 
@@ -90,10 +95,19 @@ save_path = 'data/records/052522/'
 
 # camera data stream
 camera = Camera()
-width = 1280
-height = 720
+width = 640
+height = 480
 camera.start_camera(width = width, height = height, framerate = 30)
 camera.load_preset('HighAccuracyPreset.json')
+
+# size = (width, height)
+# video = cv2.VideoCapture(0)
+# if (video.isOpened() == False): 
+#     print("Error reading video file")
+# result = cv2.VideoWriter('filename.avi', 
+#                          cv2.VideoWriter_fourcc(*'MJPG'),
+#                          10, size)
+
 
 # ESC params init
 eps = 1e-2
@@ -115,6 +129,7 @@ pc = rs.pointcloud()
 frame_id = 0
 try:
     while True:
+        amplitude = 1.0
         frame_id = frame_id + 1
         print(frame_id)
         start_time = time.time()
@@ -126,27 +141,28 @@ try:
             prev_cost = 1e10
         cost = compute_fill_factor(depth)
         j = 0
-        while np.abs(cost - prev_cost) > eps and cost > 1.0:
-            j = j + 1
-            print("ESC Iteration number: ", j)
-            print("Hold Camera still ... ESC working.")
-            frame_id = frame_id + 1
-            pES = camera.get_depth_sensor_params()
-            pES_n = p_normalize(pES)
-            pES_n = ES_step(pES_n,j,cost,amplitude)
-            pES = p_un_normalize(pES_n)
-            prev_cost = cost
-            camera.set_depth_sensor_params(pES)
-            color_frame, depth_frame = get_frame(camera)
-            depth = np.asarray(depth_frame.get_data())
-            color = np.asarray(color_frame.get_data())
-            depth = np.expand_dims(depth, axis = 0)
-            cost = compute_fill_factor(depth)
-            print("Cost: ", cost)
-            print("Improvement: ", np.abs(cost - prev_cost))
-            if np.abs(cost - prev_cost) < eps and cost < 0.25:
-                print("Camera param calibration complete.")
-                break
+        # while np.abs(cost - prev_cost) > eps and cost > 1.0:
+        #     j = j + 1
+        #     print("ESC Iteration number: ", j)
+        #     print("Hold Camera still ... ESC working.")
+        #     frame_id = frame_id + 1
+        #     pES = camera.get_depth_sensor_params()
+        #     pES_n = p_normalize(pES)
+        #     pES_n = ES_step(pES_n,j,cost,amplitude)
+        #     pES = p_un_normalize(pES_n)
+        #     prev_cost = cost
+        #     camera.set_depth_sensor_params(pES)
+        #     color_frame, depth_frame = get_frame(camera)
+        #     depth = np.asarray(depth_frame.get_data())
+        #     color = np.asarray(color_frame.get_data())
+        #     depth = np.expand_dims(depth, axis = 0)
+        #     cost = compute_fill_factor(depth)
+        #     print("Cost: ", cost)
+        #     print("Improvement: ", np.abs(cost - prev_cost))
+        #     amplitude = amplitude*decay_rate
+        #     if np.abs(cost - prev_cost) < eps and cost < 0.25:
+        #         print("Camera param calibration complete.")
+        #         break
         pointsContainer = pc.calculate(depth_frame)
         points = np.asarray(pointsContainer.get_vertices())
         points = points.view(np.float32).reshape(points.shape + (-1,))
@@ -157,12 +173,15 @@ try:
         x = x.reshape((height,width, 1))
         y = y.reshape((height,width, 1))
         z = z.reshape((height,width, 1))
-        if frame_id % 100 == 0:
-            save_data(frame_id=frame_id, save_path=save_path, rgb = color, x = x, y = y, z = z)
-        # cv2.imshow("Frame",color)   #show captured frame
-        # #press 'q' to break out of the loop
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     break
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth[0], alpha=0.03), cv2.COLORMAP_JET)
+        print(color.shape, depth_colormap.shape)
+        if frame_id % 10 == 0:
+            save_data(frame_id=frame_id, save_path=save_path, rgb = color, x = x, y = y, z = depth_colormap)
+        
+        cv2.imshow("Frame",np.hstack([color, depth_colormap]))   #show captured frame
+        #press 'q' to break out of the loop
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
         # --- Data from RTAB Map --- #
         '''
@@ -173,6 +192,11 @@ try:
         # Call save_data to write data into file (continuous? too much space(!!))
 
 
-        print("--- %s Hz ---" % (1/(time.time() - start_time)))
+        # print("--- %s Hz ---" % (1/(time.time() - start_time)))
 finally:
+    # video.release()
+    # result.release()
+    cv2.destroyAllWindows()
+    print("The video was successfully saved")
+    print("stopping the camera")
     camera.stop()

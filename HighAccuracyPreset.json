@@ -44,6 +44,5 @@
     "param-secondpeakdelta": "647",
     "param-texturecountthresh": "0",
     "param-texturedifferencethresh": "1722",
-    "param-usersm": "1",
-    "param-disparityshift": "125"
+    "param-usersm": "1"
 }
