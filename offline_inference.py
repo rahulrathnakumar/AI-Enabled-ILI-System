@@ -60,6 +60,7 @@ dataset = args.dataset
 data_fmt = args.data_fmt
 model_path = args.model_path
 mc_samples = args.mc_samples
+
 '''
 Data FMT:
 RGB-X-Y-Z-Odom
@@ -84,8 +85,10 @@ else:
 vgg_model = VGGNet()
 if data_fmt == 'rgbd':
     net = FCNDepth(pretrained_net=vgg_model, n_class = num_classes, p = p)
+    val_dataset = ASUDepth(root_dir = root_dir, num_classes = num_classes, image_set='val', transforms= data_transforms['val'])
 elif data_fmt == 'rgbdnc':
     net = FCNDNC(pretrained_net = vgg_model, n_class = num_classes, p = p)
+
 elif data_fmt == 'rgbdc':
     net = FCNDC(pretrained_net = vgg_model, n_class = num_classes, p = p)
 else:
@@ -101,15 +104,15 @@ print("Validating at epoch: {:.4f}".format(epoch))
 with torch.no_grad():
     net.dropout.train()
     softmax = nn.Softmax(dim = 1)
-    for iter, (input, label) in enumerate(val_dataloader):
+    for iter, data in enumerate(val_dataloader):
         sampled_outs = []
         outs_sm = []
         input = input.to(device)
         label = label.to(device)
         # Predicted aleatoric variance from a single pass
-        aleatoric_variance = net(input)[:, num_classes:, :, :]
-        assert aleatoric_variance.shape[1] == num_classes, "Aleatoric uncertainty shape error."
-        aleatoric_variance = np.exp(aleatoric_variance.detach().clone().cpu().numpy())
+        aleatoric_uncertainty = net(input)[:, num_classes:, :, :]
+        assert aleatoric_uncertainty.shape[1] == num_classes, "Aleatoric uncertainty shape error."
+        aleatoric_uncertainty = np.exp(aleatoric_uncertainty.detach().clone().cpu().numpy())
         # Sampled epistemic uncertainty
         for i in range(mc_samples):
             sampled_outs.append(net(input))
@@ -123,12 +126,10 @@ with torch.no_grad():
         mean_output = np.mean(np.stack(outs_sm), axis = 0)
         epistemic_uncertainty = np.mean(np.stack(outs_sm), axis = 0) - (np.mean(np.stack(outs_sm), axis = 0))**2 # Batches x num_classes x W x H
         classwise_epistemic_uncertainty = np.mean(epistemic_uncertainty, axis = (2,3))
-        normalized_classwise_epistemic_uncertainty = ((classwise_epistemic_uncertainty.transpose() - np.min(classwise_epistemic_uncertainty, axis = 1))/(np.max(classwise_epistemic_uncertainty, axis = 1) - np.min(classwise_epistemic_uncertainty, axis = 1))).transpose()
-        
-        
-        
+        classwise_aleatoric_uncertainty = np.mean(aleatoric_uncertainty, axis = (2,3))
+        '''
+        To do:
+        Call measurement function from here:
+        Measurement function currently computes corrosion failure probability of the largest defect.
 
-
-
-
-
+        '''

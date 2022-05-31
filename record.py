@@ -95,8 +95,8 @@ save_path = 'data/records/052522/'
 
 # camera data stream
 camera = Camera()
-width = 640
-height = 480
+width = 1280
+height = 720
 camera.start_camera(width = width, height = height, framerate = 30)
 camera.load_preset('HighAccuracyPreset.json')
 
@@ -141,28 +141,29 @@ try:
             prev_cost = 1e10
         cost = compute_fill_factor(depth)
         j = 0
-        # while np.abs(cost - prev_cost) > eps and cost > 1.0:
-        #     j = j + 1
-        #     print("ESC Iteration number: ", j)
-        #     print("Hold Camera still ... ESC working.")
-        #     frame_id = frame_id + 1
-        #     pES = camera.get_depth_sensor_params()
-        #     pES_n = p_normalize(pES)
-        #     pES_n = ES_step(pES_n,j,cost,amplitude)
-        #     pES = p_un_normalize(pES_n)
-        #     prev_cost = cost
-        #     camera.set_depth_sensor_params(pES)
-        #     color_frame, depth_frame = get_frame(camera)
-        #     depth = np.asarray(depth_frame.get_data())
-        #     color = np.asarray(color_frame.get_data())
-        #     depth = np.expand_dims(depth, axis = 0)
-        #     cost = compute_fill_factor(depth)
-        #     print("Cost: ", cost)
-        #     print("Improvement: ", np.abs(cost - prev_cost))
-        #     amplitude = amplitude*decay_rate
-        #     if np.abs(cost - prev_cost) < eps and cost < 0.25:
-        #         print("Camera param calibration complete.")
-        #         break
+        while cost > 1.0:
+            j = j + 1
+            print("ESC Iteration number: ", j)
+            print("Hold Camera still ... ESC working.")
+            frame_id = frame_id + 1
+            pES = camera.get_depth_sensor_params()
+            pES_n = p_normalize(pES)
+            pES_n = ES_step(pES_n,j,cost,amplitude)
+            pES = p_un_normalize(pES_n)
+            prev_cost = cost
+            camera.set_depth_sensor_params(pES)
+            print("Params modified for iteration : ", j)
+            color_frame, depth_frame = get_frame(camera)
+            depth = np.asarray(depth_frame.get_data())
+            color = np.asarray(color_frame.get_data())
+            depth = np.expand_dims(depth, axis = 0)
+            cost = compute_fill_factor(depth)
+            print("Cost: ", cost)
+            print("Improvement: ", np.abs(cost - prev_cost))
+            amplitude = amplitude*decay_rate
+            if j > 100 and cost < 0.25:
+                print("Camera param calibration complete.")
+                break
         pointsContainer = pc.calculate(depth_frame)
         points = np.asarray(pointsContainer.get_vertices())
         points = points.view(np.float32).reshape(points.shape + (-1,))
