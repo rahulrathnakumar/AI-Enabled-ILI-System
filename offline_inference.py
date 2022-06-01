@@ -40,6 +40,7 @@ from matplotlib import cm
 # Modules
 from network import *
 from dataset import *
+from risk_assessment import measure, ASME_B31g, NG18
 
 
 use_gpu = torch.cuda.is_available()
@@ -63,6 +64,7 @@ model_path = args.model_path
 mc_samples = args.mc_samples
 root_dir = args.root_dir
 p = 0.5 # Dropout ratio
+batch_size = 32 # max this out!
 '''
 Data FMT:
 RGB-X-Y-Z-Odom
@@ -102,6 +104,7 @@ else:
 net, epoch = load_ckp(model_path, net)
 val_dataset = DefectDataset(root_dir = root_dir, num_classes = num_classes, input_modalities = input_modalities,
 image_set = 'val')
+val_dataloader = DataLoader(val_dataset, batch_size= batch_size, shuffle=False)
 vgg_model = vgg_model.to(device)
 net = net.to(device)
 net.eval()
@@ -130,14 +133,8 @@ with torch.no_grad():
             outs_sm.append(out__.cpu().numpy())
             # compute_metrics(out_, label.detach().clone())
         
-        mean_output = np.mean(np.stack(outs_sm), axis = 0)
+        mean_output = np.mean(np.stack(outs_sm), axis = 0) # TODO: Threshold this mean output (int?)
         epistemic_uncertainty = np.mean(np.stack(outs_sm), axis = 0) - (np.mean(np.stack(outs_sm), axis = 0))**2 # Batches x num_classes x W x H
         classwise_epistemic_uncertainty = np.mean(epistemic_uncertainty, axis = (2,3))
         classwise_aleatoric_uncertainty = np.mean(aleatoric_uncertainty, axis = (2,3))
-        '''
-        To do:
-        Call measurement function from here:
-        Measurement function currently computes corrosion area of the largest defect in the scene. 
-
-        
-        '''
+        measurements = measure(mean_output)
