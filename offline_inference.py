@@ -53,6 +53,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", help = 'OPTIONS: Pipeline, RoadCracks', default = 'Pipeline')
 parser.add_argument("--data_fmt", help = 'OPTIONS: rgb, rgb-d, rgb-dc, rgb-dnc', default = 'rgb-dnc')
 parser.add_argument("--model_path", help = 'full path to inference model weights', default= 'models/')
+parser.add_argument("--root_dir", help = "Root directory for images", default = 'data/rec_0/')
 parser.add_argument("--mc_samples", help = 'Number of MC Dropout samples (int) ', default = '10')
 args = parser.parse_args()
 
@@ -60,7 +61,8 @@ dataset = args.dataset
 data_fmt = args.data_fmt
 model_path = args.model_path
 mc_samples = args.mc_samples
-
+root_dir = args.root_dir
+p = 0.5 # Dropout ratio
 '''
 Data FMT:
 RGB-X-Y-Z-Odom
@@ -81,20 +83,25 @@ if dataset == 'Pipeline':
 else:
     num_classes = 2
 
+
 # Load model 
 vgg_model = VGGNet()
 if data_fmt == 'rgbd':
-    net = FCNDepth(pretrained_net=vgg_model, n_class = num_classes, p = p)
-    val_dataset = ASUDepth(root_dir = root_dir, num_classes = num_classes, image_set='val', transforms= data_transforms['val'])
+    input_modalities = ['images', 'depth']
+    net = FCNDepth(pretrained_net = vgg_model, n_class = num_classes, p = p)
 elif data_fmt == 'rgbdnc':
+    input_modalities = ['images', 'depth', 'normal', 'curvature']
     net = FCNDNC(pretrained_net = vgg_model, n_class = num_classes, p = p)
-
 elif data_fmt == 'rgbdc':
+    input_modalities = ['images', 'depth', 'curvature']
     net = FCNDC(pretrained_net = vgg_model, n_class = num_classes, p = p)
 else:
-    net = FCNs(pretrained_net=vgg_model, n_class = num_classes, p = p)
+    input_modalities = ['images']
+    net = FCN(pretrained_net = vgg_model, n_class = num_classes, p = p)
 
 net, epoch = load_ckp(model_path, net)
+val_dataset = DefectDataset(root_dir = root_dir, num_classes = num_classes, input_modalities = input_modalities,
+image_set = 'val')
 vgg_model = vgg_model.to(device)
 net = net.to(device)
 net.eval()
@@ -130,6 +137,7 @@ with torch.no_grad():
         '''
         To do:
         Call measurement function from here:
-        Measurement function currently computes corrosion failure probability of the largest defect.
+        Measurement function currently computes corrosion area of the largest defect in the scene. 
 
+        
         '''
