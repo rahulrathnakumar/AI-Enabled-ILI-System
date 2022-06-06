@@ -15,7 +15,7 @@ Camera class should create an object that can stream depth data and all params i
 def get_attributes(obj):
     return [a for a in dir(obj) if not a.startswith('__') and not callable(getattr(obj, a))]
 
-class Camera(rs.pipeline, rs.config, rs.rs400_advanced_mode):
+class Camera(rs.pipeline, rs.rs400_advanced_mode):
     '''
     '''
     def __init__(self, preset = None, intrinsics = None, params = None) -> None:
@@ -35,7 +35,7 @@ class Camera(rs.pipeline, rs.config, rs.rs400_advanced_mode):
 
         '''
         rs.pipeline.__init__(self)
-        rs.config.__init__(self)
+        # rs.config.__init__(self)
         ctx = rs.context()
         ds5_dev = rs.device()
         devices = ctx.query_devices()
@@ -47,12 +47,12 @@ class Camera(rs.pipeline, rs.config, rs.rs400_advanced_mode):
         rs.rs400_advanced_mode.__init__(self, devices[0])
         # Parameter attribute for depth sensor
         self.param_dict = self.get_depth_sensor_params()
-    def start_camera(self, height = 640, width = 480, framerate = 30, streams = None):
+    def start_camera(self, height, width, framerate, streams = None):
         '''
         Start camera streams specified by list streams:
         Arguments: 
-        height: int, Default : 1280
-        width: int, Default : 720
+        height: int
+        width: int
         framerate: int, Default: 30
         streams: List, Default: None
         Optional - Enables motion, color, infrared and depth streams by default for the D435i
@@ -61,11 +61,19 @@ class Camera(rs.pipeline, rs.config, rs.rs400_advanced_mode):
         
         Returns: None
         '''
-        if streams == None:
-            self.enable_stream(rs.stream.depth, height, width, rs.format.z16, framerate)
-            self.enable_stream(rs.stream.color, height, width, rs.format.rgb8, framerate)
-            self.enable_stream(rs.stream.infrared, height, width, framerate)
-        self.start()
+        # if streams == None:
+        config = rs.config()
+        # pipeline = rs.pipeline()
+        # config.enable_stream(stream_type = rs.stream.depth, stream_index = -1, format = rs.format.z16, height = height, width = width, framerate = 0)
+        # config.enable_stream(stream_type = rs.stream.color, stream_index = -1, format = rs.format.bgr8, height = height, width = width, framerate = 0)
+        # # self.enable_stream(rs.stream.infrared, height, width, framerate)
+        # config.enable_stream(rs.stream.accel)
+        # config.enable_stream(rs.stream.gyro)
+        config.enable_stream(rs.stream.depth, width = width, height = height, format = rs.format.z16, framerate = 30)
+        config.enable_stream(rs.stream.color, width = width, height = height, format = rs.format.bgr8, framerate = 30)
+        config.enable_stream(rs.stream.accel)
+        config.enable_stream(rs.stream.gyro)
+        self.start(config)
     def stop_camera(self):
         self.stop()
 
@@ -137,8 +145,11 @@ class Camera(rs.pipeline, rs.config, rs.rs400_advanced_mode):
         # depthControlParams = params[3:13]
         # Basic param update
         self.depth_sensor.set_option(rs.option.exposure, params[0])
+        time.sleep(1)
         self.depth_sensor.set_option(rs.option.gain, basic_params[1])
+        time.sleep(1)
         self.depth_sensor.set_option(rs.option.laser_power, basic_params[2])
+        time.sleep(1)
         # # Advanced param update
         # for i, attr in enumerate(get_attributes(STdepthControlGroup)):
         #     setattr(STdepthControlGroup, attr, int(depthControlParams[i]))

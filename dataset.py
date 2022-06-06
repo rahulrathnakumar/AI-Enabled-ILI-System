@@ -31,7 +31,7 @@ class DefectDataset(Dataset):
     Streaming inference:
      -- Dataloading not impl yet.
     '''
-    def __init__(self, root_dir, num_classes, input_modalities = ['images', 'depth', 'normal', 'curvature'], image_set='train', num_training = None,  transforms=None, labels_avail = False):
+    def __init__(self, root_dir, num_classes, input_modalities = ['rgb', 'depth', 'normal', 'curvature'], image_set='train', num_training = None,  transforms=None, labels_avail = False):
         self.n_class = num_classes
         self.root_dir = root_dir
         self.image_set = image_set
@@ -64,12 +64,12 @@ class DefectDataset(Dataset):
         return img_list
 
     def __len__(self):
-        return len(self.images)
+        return len(self.data_filenames['rgb'])
 
     def __getitem__(self, index):
         data = dict((key, []) for key in self.input_modalities)
         for key in data:
-            if key == 'normal' or key == 'images':
+            if key == 'normal' or key == 'rgb':
                 data[key] = Image.open(self.data_filenames[key][index]).convert('RGB')
             else:
                 data[key] = Image.open(self.data_filenames[key][index]).convert('L')
