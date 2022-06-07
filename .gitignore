@@ -5,4 +5,12 @@ archs/*
 data/*
 models/*
 results/*
+rospy_tutorials/*
+script/*
 *.pyc
+scripts/listener.py
+.gitignore
+scripts/talker.py
+__pycache__/*
+CMakeLists.txt
+

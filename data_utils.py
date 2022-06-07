@@ -2,7 +2,7 @@ import os
 import glob
 import re
 import shutil
-import urllib
+import urllib.request
 
 import cv2
 import numpy as np

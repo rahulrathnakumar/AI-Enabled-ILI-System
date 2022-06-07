@@ -62,7 +62,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", help = 'OPTIONS: Pipeline, RoadCracks', default = 'Pipeline')
 parser.add_argument("--data_fmt", help = 'OPTIONS: rgb, rgb-d, rgb-dc, rgb-dnc', default = 'rgb')
 parser.add_argument("--model_path", help = 'full path to inference model weights', 
-default= 'models/ASU_FULL_PredictiveVariance_0.1dropout_24Train_RGB_0/best/best_model.pt')
+default= 'models/ASU_FULL_PredictiveVariance_0.1dropout_39Train_ExtraData_RGB_0/best/best_model.pt')
 parser.add_argument("--root_dir", help = "Root directory for images", default = 'data/records/060422')
 parser.add_argument("--mc_samples", help = 'Number of MC Dropout samples (int) ', default = '10')
 args = parser.parse_args()

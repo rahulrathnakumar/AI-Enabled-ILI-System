@@ -23,7 +23,7 @@ import cv2
 import time
 import urllib.request
 import argparse
-
+import os
 
 
 import matplotlib.pyplot as plt
@@ -43,6 +43,9 @@ args = parser.parse_args()
 
 ip = args.ip
 link = 'http://' + ip + ':8080'
+use_stepper = False
+
+
 
 def save_data(frame_id, save_path, rgb, x, y, z, odom_raw = None):
     if frame_id == 10:
@@ -105,8 +108,7 @@ def p_un_normalize(p):
 
 
 # save
-save_path = 'data/records/060422/'
-
+save_path = 'data/records/060622/'
 # camera data stream
 camera = Camera()
 width = 848
@@ -143,7 +145,9 @@ pc = rs.pointcloud()
 frame_id = 0
 try:
     while True:
-        stepper_odom = get_stepper_odom(link)
+        start_time = time.time()
+        if use_stepper == True:
+            stepper_odom = get_stepper_odom(link)
         amplitude = 1.0
         frame_id = frame_id + 1
         # print(frame_id)
@@ -151,7 +155,10 @@ try:
         frame, color_frame, depth_frame= get_frame(camera)
         accel = get_accel_data(frame)
         gyro = get_gyro_data(frame)
-        odom_raw = np.asarray([gyro, accel, stepper_odom])
+        if use_stepper == True:
+            odom_raw = np.asarray([gyro, accel, stepper_odom])
+        else:
+            odom_raw = np.asarray([gyro, accel])
         color = np.asarray(color_frame.get_data())
         depth = np.asarray(depth_frame.get_data())
         depth = np.expand_dims(depth, axis = 0)
@@ -193,9 +200,9 @@ try:
         z = z.reshape((height,width, 1))
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth[0], alpha=0.03), cv2.COLORMAP_JET)
         # print(color.shape, depth_colormap.shape)
-        if frame_id % 10 == 0:
-            save_data(frame_id=frame_id, save_path=save_path, rgb = color, x = x, y = y, z = z
-            , odom_raw = odom_raw)
+        # if frame_id % 1 == 0:
+        #     save_data(frame_id=frame_id, save_path=save_path, rgb = color, x = x, y = y, z = z
+        #     , odom_raw = odom_raw)
         
         cv2.imshow("Frame",np.hstack([color, depth_colormap]))   #show captured frame
         #press 'q' to break out of the loop
@@ -211,7 +218,7 @@ try:
         # Call save_data to write data into file (continuous? too much space(!!))
 
 
-        # print("--- %s Hz ---" % (1/(time.time() - start_time)))
+        print("--- %s Hz ---" % (1/(time.time() - start_time)))
 finally:
     # video.release()
     # result.release()
