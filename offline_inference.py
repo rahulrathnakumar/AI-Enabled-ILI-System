@@ -23,6 +23,12 @@ import csv
 import time 
 import argparse
 import logging
+import json
+
+
+# Data processing
+import csv
+import pandas as pd
 
 # Torch
 import torch
@@ -123,18 +129,25 @@ std=[0.229, 0.224, 0.225]
 print('Preparing dataset...')
 print('Creating directories...')
 # prepare_images_for_offline_inference(root_dir=root_dir, modalities = ['rgb', 'depth'])
-prepare_npy_for_offline_inference(root_dir = root_dir, modalities = ['rgb', 'x', 'y', 'depth'])
+
+# prepare_npy_for_offline_inference(root_dir = root_dir, modalities = ['rgb', 'depth', 'x', 'y', 'z'])
 print('Creating dataloaders...')
 val_dataset = DefectDataset(root_dir = root_dir, num_classes = num_classes, input_modalities = input_modalities,
 image_set = 'val')
 val_dataloader = DataLoader(val_dataset, batch_size= batch_size, shuffle=False)
-
+invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
+                                                     std = [ 1/0.229, 1/0.224, 1/0.225 ]),
+                                transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],
+                                                     std = [ 1., 1., 1. ]),
+                               ])
 
 print("Validating at epoch: {:.4f}".format(epoch))
+measurements = []
 with torch.no_grad():
     net.dropout.train()
     softmax = nn.Softmax(dim = 1)
-    for iter, data in enumerate(val_dataloader):
+    for iter, (img_name, data, data_for_measurement) in enumerate(val_dataloader):
+        start_time = time.time()
         sampled_outs = []
         outs_sm = []
         for modality in input_modalities:
@@ -157,10 +170,19 @@ with torch.no_grad():
         mean_output = np.mean(np.stack(outs_sm), axis = 0) # TODO: Threshold this mean output (int?)
         N, _, h, w = mean_output.shape
         pred = mean_output.transpose(0, 2, 3, 1).reshape(-1, num_classes).argmax(axis=1).reshape(N, h, w)
-        imshowpair.imshowpair(data[modality][0][0].detach().cpu().numpy(), pred[0])
-        plt.savefig('results/060422/' + str(iter) + '.png')
-        plt.close()
+        # cv2.imwrite('results/060422/' + img_name[0] + '.jpg', 
+        # cv2.hconcat([(invTrans(data[modality][0].detach().cpu())*255).numpy().astype('uint8')[0], (pred[0]*50).astype('uint8')]))
+        # imshowpair.imshowpair(data[modality][0][0].detach().cpu().numpy(), pred[0])
+        # plt.savefig('results/060422/' + img_name[0] + '.png')
+        # plt.close()
         epistemic_uncertainty = np.mean(np.stack(outs_sm), axis = 0) - (np.mean(np.stack(outs_sm), axis = 0))**2 # Batches x num_classes x W x H
         classwise_epistemic_uncertainty = np.mean(epistemic_uncertainty, axis = (2,3))
         classwise_aleatoric_uncertainty = np.mean(aleatoric_uncertainty, axis = (2,3))
-        # measurements = measure(mean_output)
+        # TODO: Check data_for_measurement argument input format 
+        print("Inference complete. Measuring defects for index ", img_name)
+        measurements.append(measure(img_name, pred, aleatoric_uncertainty, data_for_measurement['x'][0][0].detach().numpy(), data_for_measurement['y'][0][0].detach().numpy(), data_for_measurement['z'][0][0].detach().numpy()))
+        print("--- %s Hz ---" % (1/(time.time() - start_time)))
+print("DONE")
+# with open('measurements.txt', 'w') as f:
+#     json.dump(str(measurements), f)
+# f.close()

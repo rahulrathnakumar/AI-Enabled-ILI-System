@@ -6,20 +6,47 @@ import urllib.request
 
 import cv2
 import numpy as np
+from scipy.interpolate import LinearNDInterpolator
+import matplotlib.pyplot as plt
 
 global_modalities = [['rgb'], ['rgb', 'depth'], ['rgb', 'depth', 'normal'], 
 ['rgb', 'depth', 'normal', 'curvature']]
 
+def fillMissingValues(target_for_interp, copy=True, 
+                      interpolator=LinearNDInterpolator): 
+    if copy: 
+        target_for_interp = target_for_interp.copy()
+    def getPixelsForInterp(img): 
+        """
+        Calculates a mask of pixels neighboring invalid values - 
+           to use for interpolation. 
+        """
+        # mask invalid pixels
+        invalid_mask = np.isnan(img) + (img == 0) 
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        #dilate to mark borders around invalid regions
+        dilated_mask = cv2.dilate(invalid_mask.astype('uint8'), kernel, 
+                          borderType=cv2.BORDER_CONSTANT, borderValue=int(0))
+        # pixelwise "and" with valid pixel mask (~invalid_mask)
+        masked_for_interp = dilated_mask *  ~invalid_mask
+        return masked_for_interp.astype('bool'), invalid_mask
+    # Mask pixels for interpolation
+    mask_for_interp, invalid_mask = getPixelsForInterp(target_for_interp)
+    # Interpolate only holes, only using these pixels
+    points = np.argwhere(mask_for_interp)
+    values = target_for_interp[mask_for_interp]
+    interp = interpolator(points, values)
+    target_for_interp[invalid_mask] = interp(np.argwhere(invalid_mask))
+    return target_for_interp
+
 
 def npy_to_imgs(npy):
     imgs = np.load(npy)
-    rgb = imgs[:,:,0:3]
-    x = imgs[:,:,3]
-    y = imgs[:,:,4]
-    z = imgs[:,:,5]
+    rgb = imgs[:,200:,0:3]
+    x = imgs[:,200:,3]
+    y = imgs[:,200:,4]
+    z = imgs[:,200:,5]
     return rgb, x, y, z
-
-
 
 
 def prepare_images_for_offline_inference(root_dir, modalities = None):
@@ -52,16 +79,21 @@ def prepare_npy_for_offline_inference(root_dir, modalities):
     odom_files = glob.glob(root_dir + '/odom' + '_*.npy')
     for file in imgs_files:
         rgb, x, y, z = npy_to_imgs(file)
-        x = cv2.normalize(x, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-        y = cv2.normalize(x, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-        z = cv2.normalize(x, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+        # x = cv2.normalize(fillMissingValues(x), None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32FC1)
+        # y = cv2.normalize(fillMissingValues(y), None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32FC1)
+        # z = cv2.normalize(fillMissingValues(z), None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32FC1)
+        x = fillMissingValues(x)
+        y = fillMissingValues(y)
+        z = fillMissingValues(z)
         save_filename = os.path.splitext(os.path.basename(file).replace(os.path.basename(file)[0:5],''))[0]
         print(save_filename)
         print(root_dir)
         cv2.imwrite(root_dir + '/rgb/' + save_filename + '.png', rgb)
-        cv2.imwrite(root_dir + '/x/' + save_filename + '.png', x)
-        cv2.imwrite(root_dir + '/y/' + save_filename + '.png', y)
         cv2.imwrite(root_dir + '/depth/' + save_filename + '.png', z)
+        
+        np.save(root_dir + '/x/' + save_filename + '.npy', x)
+        np.save(root_dir + '/y/' + save_filename + '.npy', y)
+        np.save(root_dir + '/z/' + save_filename + '.npy', z)
     files = glob.glob(root_dir + '/rgb/' + '*.png')
     f = open(root_dir + '/val.txt', 'w')
     for img in files: f.write(os.path.basename(img) + "\n")

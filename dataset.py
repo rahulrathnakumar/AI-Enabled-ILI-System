@@ -2,6 +2,8 @@ import os
 import random
 import unittest
 
+import cv2
+from scipy.interpolate import LinearNDInterpolator
 from cv2 import resize
 from sympy import root
 import torch
@@ -20,6 +22,33 @@ from transforms_utils import RandomChoice
 
 torch.manual_seed(17)
 
+def fillMissingValues(target_for_interp, copy=True, 
+                      interpolator=LinearNDInterpolator): 
+    if copy: 
+        target_for_interp = target_for_interp.copy()
+    def getPixelsForInterp(img): 
+        """
+        Calculates a mask of pixels neighboring invalid values - 
+           to use for interpolation. 
+        """
+        # mask invalid pixels
+        invalid_mask = np.isnan(img) + (img == 0) 
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        #dilate to mark borders around invalid regions
+        dilated_mask = cv2.dilate(invalid_mask.astype('uint8'), kernel, 
+                          borderType=cv2.BORDER_CONSTANT, borderValue=int(0))
+        # pixelwise "and" with valid pixel mask (~invalid_mask)
+        masked_for_interp = dilated_mask *  ~invalid_mask
+        return masked_for_interp.astype('bool'), invalid_mask
+    # Mask pixels for interpolation
+    mask_for_interp, invalid_mask = getPixelsForInterp(target_for_interp)
+    # Interpolate only holes, only using these pixels
+    points = np.argwhere(mask_for_interp)
+    values = target_for_interp[mask_for_interp]
+    interp = interpolator(points, values)
+    target_for_interp[invalid_mask] = interp(np.argwhere(invalid_mask))
+    return target_for_interp
+
 class DefectDataset(Dataset):
     '''
     An Extensible Multi-Modality Dataset Class
@@ -37,11 +66,14 @@ class DefectDataset(Dataset):
         self.image_set = image_set
         self.transforms = transforms
         self.input_modalities = input_modalities # Needs to have same name as path (assert this)
+        self.measurement_modalities = ['x', 'y', 'z']
         self.labels_avail = labels_avail
         if self.labels_avail:
             # self.target_filenames = []
             self.input_modalities.append('labels')
         self.data_filenames = dict((key, []) for key in self.input_modalities)
+        self.data_for_measurement_filenames = dict((key, []) for key in self.measurement_modalities)
+
         if num_training and image_set == 'train':
             self.reference_filename = os.path.join(root_dir, '{image_set}_{num_training}samples.txt'.format(image_set = image_set, num_training = num_training))
             img_list = np.random.choice(self.read_image_list(self.reference_filename), num_training, replace= False)
@@ -52,6 +84,9 @@ class DefectDataset(Dataset):
             for modality in self.input_modalities:
                 if os.path.isfile(os.path.join(root_dir, modality + '/{:s}'.format(img_name))):
                     self.data_filenames[modality].append(os.path.join(root_dir, modality + '/{:s}'.format(img_name)))
+            for modality in self.measurement_modalities:
+                if os.path.isfile(os.path.join(root_dir, modality + '/{:s}'.format(img_name[:-4] + '.npy'))):
+                    self.data_for_measurement_filenames[modality].append(os.path.join(root_dir, modality + '/{:s}'.format(img_name[:-4] + '.npy')))
 
     def read_image_list(self, filename):
         list_file = open(filename, 'r')
@@ -68,15 +103,22 @@ class DefectDataset(Dataset):
 
     def __getitem__(self, index):
         data = dict((key, []) for key in self.input_modalities)
+        img_name = os.path.splitext(os.path.basename(self.data_filenames[self.input_modalities[0]][index]))[0]
+
         for key in data:
             if key == 'normal' or key == 'rgb':
                 data[key] = Image.open(self.data_filenames[key][index]).convert('RGB')
             else:
                 data[key] = Image.open(self.data_filenames[key][index]).convert('L')
+        
+        data_for_measurement = dict((key, []) for key in self.measurement_modalities)
+        for key in data_for_measurement:
+            data_for_measurement[key] = np.load(self.data_for_measurement_filenames[key][index])
 
         if self.transforms is not None:
             transform = RandomChoice(self.transforms)
             for key in data: data[key] = transform([data[key]])
+            for key in data_for_measurement: data_for_measurement[key] = transform([data_for_measurement[key]])
 
         # Data transform : resize, convert to tensor and normalize
         resize_data = transforms.Resize((224,224))
@@ -103,7 +145,12 @@ class DefectDataset(Dataset):
                 for c in range(self.n_class):
                     label[c][data[key] == c] = 1
                 data[key] = label
-        return data
+        
+        for key in data_for_measurement:
+            # data_for_measurement[key] = resize_data.__call__(data_for_measurement[key])
+            data_for_measurement[key] = totensor(data_for_measurement[key])
+            # data_for_measurement[key] = normalize_L(data_for_measurement[key])
+        return img_name, data, data_for_measurement
 
 if __name__ == "__main__":
     dataset = DefectDataset(root_dir = '/home/rrathnak/Documents/Work/Task-2/Datasets/asuDataset', num_classes = 3, num_training=8, labels_avail=True)
